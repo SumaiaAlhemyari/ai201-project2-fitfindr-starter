@@ -1,0 +1,244 @@
+# FitFindr — Function Reference
+
+A breakdown of every function in the project: its header (signature), what it
+returns, and how it interacts with the other functions. Functions are labeled
+**A** through **H** and the architecture diagram at the end uses the same labels.
+
+---
+
+## A. `search_listings` — *Tool 1* — [tools.py:39](tools.py#L39)
+
+**Header**
+```python
+def search_listings(
+    description: str,
+    size: str | None = None,
+    max_price: float | None = None,
+) -> list[dict]:
+```
+
+**Returns**
+- A `list[dict]` of matching listings, sorted by relevance (best match first).
+- Empty list `[]` when nothing matches — **never raises**.
+- Each listing dict: `id, title, description, category, style_tags (list),
+  size, condition, price (float), colors (list), brand, platform`.
+
+**Interactions**
+- Calls **G** `load_listings()` to get the raw dataset, then filters/scores it.
+- Called by **F** `run_agent()` (Step 3). Its top result becomes
+  `session["selected_item"]` and is fed into **B** `suggest_outfit()`.
+
+---
+
+## B. `suggest_outfit` — *Tool 2* — [tools.py:78](tools.py#L78)
+
+**Header**
+```python
+def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
+```
+
+**Returns**
+- A non-empty `str` with 1–2 outfit suggestions.
+- If the wardrobe is empty → general styling advice (still a non-empty string).
+- **Never** raises and never returns `""`.
+
+**Interactions**
+- Receives `new_item` (the top listing from **A**) and `wardrobe`.
+- Uses the Groq LLM via **H** `_get_groq_client()`.
+- Called by **F** `run_agent()` (Step 5); output stored in
+  `session["outfit_suggestion"]` and passed into **C** `create_fit_card()`.
+
+---
+
+## C. `create_fit_card` — *Tool 3* — [tools.py:109](tools.py#L109)
+
+**Header**
+```python
+def create_fit_card(outfit: str, new_item: dict) -> str:
+```
+
+**Returns**
+- A 2–4 sentence `str` caption (OOTD/social-post style).
+- If `outfit` is empty/whitespace → a descriptive error message string
+  (**not** an exception).
+
+**Interactions**
+- Receives the string output of **B** and the listing dict from **A**.
+- Uses the Groq LLM via **H** `_get_groq_client()` (higher temperature).
+- Called by **F** `run_agent()` (Step 6); output stored in `session["fit_card"]`.
+
+---
+
+## D. `handle_query` — *UI handler* — [app.py:23](app.py#L23)
+
+**Header**
+```python
+def handle_query(user_query: str, wardrobe_choice: str) -> tuple[str, str, str]:
+```
+
+**Returns**
+- A 3-tuple of strings: `(listing_text, outfit_suggestion, fit_card)`.
+- Each element maps to one of the three Gradio output panels.
+- On empty query or `session["error"]` → error in the first element, `""` in the
+  other two.
+
+**Interactions**
+- Entry point from the Gradio UI (**E** wires it to the button + submit events).
+- Picks the wardrobe via **G** `get_example_wardrobe()` / `get_empty_wardrobe()`.
+- Calls **F** `run_agent()` and unpacks the returned session dict into the tuple.
+
+---
+
+## E. `build_interface` — *UI builder* — [app.py:60](app.py#L60)
+
+**Header**
+```python
+def build_interface():
+```
+
+**Returns**
+- A Gradio `Blocks` `demo` object (the assembled UI).
+
+**Interactions**
+- Wires `submit_btn.click` and `query_input.submit` to **D** `handle_query`.
+- Called by the `__main__` block, which then calls `demo.launch()`.
+
+---
+
+## F. `run_agent` — *Planning loop* — [agent.py:50](agent.py#L50)
+
+**Header**
+```python
+def run_agent(query: str, wardrobe: dict) -> dict:
+```
+
+**Returns**
+- The completed **session dict**. Check `session["error"]` first:
+  - `None` → success; `outfit_suggestion` and `fit_card` are populated.
+  - non-`None` → ended early; those output fields are `None`.
+
+**Interactions** (orchestrator — the hub of the system)
+- Initializes state via **I** `_new_session()`.
+- Parses the query, then calls **A** → selects top item → calls **B** → calls **C**,
+  threading results through the session dict between each step.
+- Short-circuits if **A** returns `[]` (sets `session["error"]`).
+- Called by **D** `handle_query` (UI) and by the `__main__` CLI test.
+
+---
+
+## G. Data loaders — [utils/data_loader.py](utils/data_loader.py)
+
+**Headers**
+```python
+def load_listings() -> list[dict]:            # line 15
+def load_wardrobe_schema() -> dict:           # line 38
+def get_example_wardrobe() -> dict:           # line 53
+def get_empty_wardrobe() -> dict:             # line 64
+```
+
+**Returns**
+- `load_listings` → list of listing dicts (from `data/listings.json`).
+- `load_wardrobe_schema` → dict with `schema`, `example_wardrobe`, `empty_wardrobe`.
+- `get_example_wardrobe` → wardrobe dict with a populated `items` list.
+- `get_empty_wardrobe` → wardrobe dict with an empty `items` list.
+
+**Interactions**
+- `load_listings` feeds **A** `search_listings`.
+- `get_example_wardrobe` / `get_empty_wardrobe` feed **D** and **F** (wardrobe input).
+- `get_example_wardrobe` / `get_empty_wardrobe` call `load_wardrobe_schema`.
+
+---
+
+## H. `_get_groq_client` — *LLM client helper* — [tools.py:27](tools.py#L27)
+
+**Header**
+```python
+def _get_groq_client():
+```
+
+**Returns**
+- A configured `Groq` client.
+- Raises `ValueError` if `GROQ_API_KEY` is missing from `.env`.
+
+**Interactions**
+- Used internally by **B** `suggest_outfit` and **C** `create_fit_card` for LLM calls.
+
+---
+
+## I. `_new_session` — *State initializer* — [agent.py:26](agent.py#L26)
+
+**Header**
+```python
+def _new_session(query: str, wardrobe: dict) -> dict:
+```
+
+**Returns**
+- A fresh session dict: `query, parsed, search_results, selected_item, wardrobe,
+  outfit_suggestion, fit_card, error`.
+
+**Interactions**
+- Called once at the top of **F** `run_agent`. This dict is the single source of
+  truth passed (mutated) between every step of the planning loop.
+
+---
+
+## Architecture Diagram
+
+```
+                            ┌──────────────────────────┐
+                            │      Gradio UI            │
+                            │   E. build_interface()    │
+                            └────────────┬─────────────┘
+                                         │  button / submit
+                                         ▼
+                            ┌──────────────────────────┐
+                            │   D. handle_query()       │
+                            │  (query, wardrobe_choice) │
+                            └────────────┬─────────────┘
+                                         │ run_agent(query, wardrobe)
+                                         ▼
+        ┌────────────────────────────────────────────────────────────┐
+        │             F. run_agent()  — PLANNING LOOP                  │
+        │                                                              │
+        │   I. _new_session()  ──►  session dict  (shared STATE)       │
+        │        { query, parsed, search_results, selected_item,       │
+        │          wardrobe, outfit_suggestion, fit_card, error }      │
+        │                                                              │
+        │   Step 3              Step 5            Step 6               │
+        │   ┌────────┐ item   ┌─────────┐ text  ┌──────────┐          │
+        │   │  A.    │ ─────► │   B.    │ ─────► │   C.     │          │
+        │   │ search │        │ suggest │        │ create   │          │
+        │   │listings│        │ outfit  │        │ fit_card │          │
+        │   └───┬────┘        └────┬────┘        └────┬─────┘          │
+        │       │  [] ?            │  LLM             │  LLM            │
+        │       │ (no results)     ▼                  ▼                │
+        │       │ set error    H. _get_groq_client()  (shared)         │
+        │       ▼                                                      │
+        │   ERROR PATH ───────────────────────────────► return session│
+        └───────┬──────────────────────────────────────────┬─────────┘
+                │ load_listings()                            │ session dict
+                ▼                                            ▼
+        ┌──────────────────┐                     back to D. handle_query()
+        │  G. data_loader   │                     → (listing, outfit, fit_card)
+        │  load_listings    │                          → 3 UI panels
+        │  get_*_wardrobe   │
+        └──────────────────┘
+              ▲
+              │ wardrobe choice
+              └────────────── from D. handle_query()
+
+Legend:
+  ──►   normal data flow (output of one tool feeds the next)
+  [] ?  branch: search_listings returns empty → ERROR PATH (skip B & C)
+  STATE the session dict is created by I, threaded through A→B→C by F
+```
+
+### Flow summary
+1. **E** builds the UI and binds events to **D**.
+2. **D** picks a wardrobe (**G**) and calls **F** `run_agent`.
+3. **F** creates state (**I**), then runs **A → B → C**, passing results through
+   the session dict.
+4. If **A** returns `[]`, **F** sets `session["error"]` and skips **B**/**C**.
+5. **B** and **C** call the LLM through **H**.
+6. **F** returns the session to **D**, which maps it to the three UI panels.
+```
