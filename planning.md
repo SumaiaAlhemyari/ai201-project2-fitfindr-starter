@@ -146,6 +146,10 @@ For each tool, describe the specific failure mode you're handling and what the a
      search_listings() using load_listings() from the data loader — then test it against 3 queries
      before trusting it" is a plan. -->
 
+     1/ For search_listings, I'll give Claude the Tool 1 block from planning.md (inputs, return value, failure mode) and ask it to implement the function using load_listings() from the data loader. Before running it, I'll check that the generated code filters by all three parameters and handles the empty-results case. Then I'll test it with 3 queries.
+     2/ For suggest_outfit, I'll give Claude the Tool 2 block from planning.md (inputs, return value, failure mode) and ask it to implement the function using load_listings() from the data loader. Before running it, I'll check that the generated code filters by all three parameters and handles the empty-results case. Then I'll test it with 3 queries.
+     3/ For create_fit_card, I'll give Claude the Tool 3 block from planning.md (inputs, return value, failure mode) and ask it to implement the function using load_listings() from the data loader. Before running it, I'll check that the generated code filters by all three parameters and handles the empty-results case. Then I'll test it with 3 queries.
+
 **Milestone 3 — Individual tool implementations:**
 
 **Milestone 4 — Planning loop and state management:**
