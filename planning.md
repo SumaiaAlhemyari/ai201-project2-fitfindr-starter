@@ -60,17 +60,21 @@ If the wardrobe is empty, offer general styling advice for the item rather than 
 
 **What it does:**
 <!-- Describe what this tool does in 1–2 sentences -->
+Generate a short, shareable outfit caption for the thrifted find.
 
 **Input parameters:**
 <!-- List each parameter, its type, and what it represents -->
-- `outfit` (...): ...
+- `outfit` (str): The outfit suggestion string from suggest_outfit().
+- `new_item` (dict): The listing dict for the thrifted item.
 
 **What it returns:**
 <!-- Describe the return value -->
-
+A 2–4 sentence string usable as an Instagram/TikTok caption.
+        
 **What happens if it fails or returns nothing:**
 <!-- What should the agent do if the outfit data is incomplete? -->
-
+If outfit is empty or missing, return a descriptive error message string — do NOT raise an exception.
+        
 ---
 
 ### Additional Tools (if any)
