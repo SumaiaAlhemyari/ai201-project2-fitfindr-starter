@@ -94,6 +94,17 @@ If outfit is empty or missing, return a descriptive error message string — do 
 
 **How does information from one tool get passed to the next?**
 <!-- Describe how your agent stores and accesses state within a session. What data is tracked? How is it passed between tool calls? -->
+The agent stores and accesses state within a session with _new_session().
+The tracked data are:
+        "query": query,              # original user query
+        "parsed": {},                # extracted description / size / max_price
+        "search_results": [],        # list of matching listing dicts
+        "selected_item": None,       # top result, passed into suggest_outfit
+        "wardrobe": wardrobe,        # user's wardrobe dict
+        "outfit_suggestion": None,   # string returned by suggest_outfit
+        "fit_card": None,            # string returned by create_fit_card
+        "error": None,               # set if the interaction ended early
+The run_agent function is paassing state between tools via a session dict using function _new_session().
 
 ---
 
@@ -103,9 +114,9 @@ For each tool, describe the specific failure mode you're handling and what the a
 
 | Tool | Failure mode | Agent response |
 |------|-------------|----------------|
-| search_listings | No results match the query | |
-| suggest_outfit | Wardrobe is empty | |
-| create_fit_card | Outfit input is missing or incomplete | |
+| search_listings | No results match the query | | Returns an empty list if nothing matches — does NOT raise an exception.
+| suggest_outfit | Wardrobe is empty | | If the wardrobe is empty, offer general styling advice for the item rather than raising an exception or returning an empty string.
+| create_fit_card | Outfit input is missing or incomplete | | If outfit is empty or missing, return a descriptive error message string — do NOT raise an exception.
 
 ---
 
